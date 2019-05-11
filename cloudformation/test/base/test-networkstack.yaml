@@ -1,0 +1,514 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'Test Env - Network Stack'
+
+Parameters:
+
+ Azs:
+   Description: 'Availability zones. Just 2 on test.'
+   Type: List<AWS::EC2::AvailabilityZone::Name>
+   Default: "eu-usa-1a,eu-usa-1b,eu-usa-1c"
+
+ VpcIpBlock:
+   Description: 'VPC -  Test Env'
+   Type: String
+   Default: "10.2.0.0/23"
+
+ WebPrivateSubnetIpBlocks:
+   Description: ' Test Env - WebPrivate'
+   Type: CommaDelimitedList
+   Default: "10.2.0.0/28, 10.2.0.16/28, 10.2.0.32/28"
+
+ DbPrivateSubnetIpBlocks:
+   Description: ' Test Env - DbPrivate'
+   Type: CommaDelimitedList
+   Default: "10.2.0.48/28, 10.2.0.64/28, 10.2.0.80/28"
+ 
+ BastionPrivateSubnetIpBlocks:
+   Description: ' Test Env - DbPrivate'
+   Type: CommaDelimitedList
+   Default: "10.2.0.144/28, 10.2.0.160/28, 10.2.0.176/28"
+
+ LbPrivateSubnetIpBlocks:
+   Description: ' Test Env - LbPrivate'
+   Type: CommaDelimitedList
+   Default: "10.2.0.96/28, 10.2.0.112/28, 10.2.0.128/28"
+
+ CommonPublicSubnetIpBlock:
+   Description: ' Test Env - CommonPublic'
+   Type: CommaDelimitedList
+   Default: "10.2.1.0/27, 10.2.1.32/27, 10.2.1.64/27"
+
+
+Resources:
+
+ Vpc1:
+   Type: AWS::EC2::VPC
+   Properties:
+     CidrBlock: !Ref "VpcIpBlock"
+     EnableDnsSupport: true
+     EnableDnsHostnames: false
+     InstanceTenancy: default
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-VPC1
+          
+
+ InternetGateway1:
+   Type: AWS::EC2::InternetGateway
+   Properties:
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-IG1
+   DependsOn: Vpc1
+
+ AttachGateway:
+   Type: AWS::EC2::VPCGatewayAttachment
+   Properties:
+     VpcId: !Ref "Vpc1"
+     InternetGatewayId: !Ref "InternetGateway1"
+   DependsOn: Vpc1
+
+ EipNatGateway1:
+   Type: AWS::EC2::EIP
+   Properties:
+     Domain: vpc
+   DependsOn: Vpc1
+
+ NatGateway1:
+   Type: AWS::EC2::NatGateway
+   Properties:
+     AllocationId:
+       Fn::GetAtt:
+         - EipNatGateway1
+         - AllocationId
+     SubnetId: !Ref "CommonPublicSubnet1"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-NGW1
+   DependsOn:
+     - EipNatGateway1
+     - Vpc1
+
+ WebPrivateSubnet1:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 0
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 0
+       - !Ref "WebPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: platform
+         Value: web
+       - Key: Name
+         Value: test_env-WEBPSUBNET1
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ WebPrivateSubnet2:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 1
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 1
+       - !Ref "WebPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: platform
+         Value: web
+       - Key: Name
+         Value: test_env-WEBPSUBNET2
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ DbPrivateSubnet1:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 0
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 0
+       - !Ref "DbPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: platform
+         Value: db
+       - Key: Name
+         Value: test_env-DBPSUBNET1
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ DbPrivateSubnet2:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 1
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 1
+       - !Ref "DbPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: platform
+         Value: db
+       - Key: Name
+         Value: test_env-DBPSUBNET2
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ BastionPrivateSubnet1:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 0
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 0
+       - !Ref "BastionPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-BASTIONPSUBNET1
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ BastionPrivateSubnet2:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 1
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 1
+       - !Ref "BastionPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-BASTIONPSUBNET2
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ LbPrivateSubnet1:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 0
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 0
+       - !Ref "LbPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: platform
+         Value: db
+       - Key: Name
+         Value: test_env-LBPSUBNET1
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ LbPrivateSubnet2:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 1
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 1
+       - !Ref "LbPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: platform
+         Value: db
+       - Key: Name
+         Value: test_env-LBPSUBNET2
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ CommonPublicSubnet1:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 0
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 0
+       - !Ref "CommonPublicSubnetIpBlock"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: platform
+         Value: common
+       - Key: Name
+         Value: test_env-COMMONPUBSUBNET1
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ CommonPublicSubnet2:
+   Type: AWS::EC2::Subnet
+   Properties:
+     AvailabilityZone: !Select
+       - 1
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 1
+       - !Ref "CommonPublicSubnetIpBlock"
+     MapPublicIpOnLaunch: false 
+     Tags:
+       - Key: env
+         Value: test
+       - Key: platform
+         Value: common
+       - Key: Name
+         Value: test_env-COMMONPUBSUBNET2
+     VpcId: !Ref "Vpc1"
+   DependsOn: Vpc1
+
+ PrivateRouteTable1:
+   Type: AWS::EC2::RouteTable
+   Properties:
+     VpcId: !Ref "Vpc1"
+     Tags:
+     - Key: env
+       Value: test
+     - Key: Name
+       Value: test_env-PRIVROUTETB01
+   DependsOn: Vpc1
+
+ PrivateNatRouteTable1:
+   Type: AWS::EC2::RouteTable
+   Properties:
+     VpcId: !Ref "Vpc1"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-PRIVNATROUTETB01
+   DependsOn: Vpc1
+
+ PublicRouteTable1:
+   Type: AWS::EC2::RouteTable
+   Properties:
+     VpcId: !Ref "Vpc1"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-PUBROUTETB01
+   DependsOn: Vpc1
+
+ WebPrivateSubnet1RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "WebPrivateSubnet1"
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+   DependsOn: 
+      - Vpc1
+      - WebPrivateSubnet1
+      - PrivateNatRouteTable1
+   
+ WebPrivateSubnet2RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "WebPrivateSubnet2"
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+   DependsOn:
+     - Vpc1
+     - WebPrivateSubnet2
+     - PrivateNatRouteTable1
+   
+ DbPrivateSubnet1RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "DbPrivateSubnet1"
+     RouteTableId: !Ref "PrivateRouteTable1"
+   DependsOn:
+     - Vpc1
+     - DbPrivateSubnet1
+     - PrivateRouteTable1
+   
+ DbPrivateSubnet2RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "DbPrivateSubnet2"
+     RouteTableId: !Ref "PrivateRouteTable1"
+   DependsOn:
+     - Vpc1
+     - DbPrivateSubnet2
+     - PrivateRouteTable1
+
+ BastionPrivateSubnet1RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "BastionPrivateSubnet1"
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+   DependsOn:
+     - Vpc1
+     - BastionPrivateSubnet1
+     - PrivateRouteTable1
+
+ BastionPrivateSubnet2RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "BastionPrivateSubnet2"
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+   DependsOn:
+     - Vpc1
+     - BastionPrivateSubnet2
+     - PrivateRouteTable1
+
+ LbPrivateSubnet1RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "LbPrivateSubnet1"
+     RouteTableId: !Ref "PrivateRouteTable1"
+   DependsOn:
+     - Vpc1
+     - LbPrivateSubnet1
+     - PrivateRouteTable1
+   
+ LbPrivateSubnet2RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "LbPrivateSubnet2"
+     RouteTableId: !Ref "PrivateRouteTable1"
+   DependsOn:
+     - Vpc1
+     - LbPrivateSubnet2
+     - PrivateRouteTable1     
+
+     
+ CommonPublicSubnet1RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "CommonPublicSubnet1"
+     RouteTableId: !Ref "PublicRouteTable1"
+   DependsOn:
+     - Vpc1
+     - CommonPublicSubnet1
+     - PublicRouteTable1
+     
+ CommonPublicSubnet2RouteTableAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "CommonPublicSubnet2"
+     RouteTableId: !Ref "PublicRouteTable1"
+   DependsOn:
+     - Vpc1
+     - CommonPublicSubnet2
+     - PublicRouteTable1
+   
+ PrivateNatRoute:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     DestinationCidrBlock: 0.0.0.0/0
+     NatGatewayId: !Ref "NatGateway1"
+   DependsOn:
+     - Vpc1
+     - NatGateway1
+     - PrivateNatRouteTable1
+
+ PublicRoute:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PublicRouteTable1"
+     DestinationCidrBlock: 0.0.0.0/0
+     GatewayId: !Ref "InternetGateway1"
+
+
+Outputs:
+
+ Vpc1:
+   Description: VpcId
+   Value: !Ref "Vpc1"
+   Export:
+     Name: !Sub "${AWS::StackName}-VPCID"
+
+ WebPrivateSubnet1:
+   Description: WebPrivateSubnet1
+   Value: !Ref "WebPrivateSubnet1"
+   Export:
+     Name: !Sub "${AWS::StackName}-WEBPRIVATESUBNET1"
+
+ WebPrivateSubnet2:
+   Description: WebPrivateSubnet2
+   Value: !Ref "WebPrivateSubnet2"
+   Export:
+     Name: !Sub "${AWS::StackName}-WEBPRIVATESUBNET2"
+
+ DbPrivateSubnet1:
+   Description: DbPrivateSubnet1
+   Value: !Ref "DbPrivateSubnet1"
+   Export:
+     Name: !Sub "${AWS::StackName}-DBPRIVATESUBNET1"
+
+ DbPrivateSubnet2:
+   Description: DbPrivateSubnet2
+   Value: !Ref "DbPrivateSubnet2"
+   Export:
+     Name: !Sub "${AWS::StackName}-DBPRIVATESUBNET2"
+
+ BastionPrivateSubnet1:
+   Description: BastionPrivateSubnet1
+   Value: !Ref "BastionPrivateSubnet1"
+   Export:
+     Name: !Sub "${AWS::StackName}-BASTIONPRIVATESUBNET1"
+ 
+ BastionPrivateSubnet2:
+   Description: BastionPrivateSubnet2
+   Value: !Ref "BastionPrivateSubnet2"
+   Export:
+     Name: !Sub "${AWS::StackName}-BASTIONPRIVATESUBNET2"
+     
+ LbPrivateSubnet1:
+   Description: LbPrivateSubnet1
+   Value: !Ref "LbPrivateSubnet1"
+   Export:
+     Name: !Sub "${AWS::StackName}-LBPRIVATESUBNET1"
+
+ LbPrivateSubnet2:
+   Description: LbPrivateSubnet2
+   Value: !Ref "LbPrivateSubnet2"
+   Export:
+     Name: !Sub "${AWS::StackName}-LBPRIVATESUBNET2"
+
+ CommonPublicSubnet1:
+   Description: CommonPublicSubnet1
+   Value: !Ref "CommonPublicSubnet1"
+   Export:
+     Name: !Sub "${AWS::StackName}-COMMONPUBLICSUBNET1"
+
+ CommonPublicSubnet2:
+   Description: CommonPublicSubnet2
+   Value: !Ref "CommonPublicSubnet2"
+   Export:
+     Name: !Sub "${AWS::StackName}-COMMONPUBLICSUBNET2"

@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'Test Env - Api Gateway'
+
+Parameters:
+
+ ApiName1:
+   Description: Api Gateway name
+   Type: String
+   Default: test-apigw1
+    
+ ApiType1:
+   Description: Api Gateway type
+   Type: String
+   Default: REGIONAL
+    
+ ApiKeySourceType1:
+   Description: Source of Api key
+   Type: String
+   Default: HEADER
+
+Resources:
+
+ ApiRest1:
+   Type: AWS::ApiGateway::RestApi
+   Properties:
+     Description: Api gateway for Rest Data Api
+     ApiKeySourceType: !Ref "ApiKeySourceType1"
+     EndpointConfiguration:
+       Types:
+         - !Ref "ApiType1"
+     Name: !Ref "ApiName1"
+     
+ ApiRestResource1:
+   Type: AWS::ApiGateway::Resource
+   Properties:
+     RestApiId: !Ref "ApiRest1"
+     ParentId:
+       Fn::GetAtt:
+         - "ApiRest1"
+         - RootResourceId
+     PathPart: databackend
+   DependsOn: ApiRest1
+
+ ApiRestResource2:
+   Type: AWS::ApiGateway::Resource
+   Properties:
+     RestApiId: !Ref "ApiRest1"
+     ParentId: !Ref "ApiRestResource1"
+     PathPart: read
+   DependsOn:
+     - ApiRest1
+     - ApiRestResource1
+
+ ApiRestResource3:
+   Type: AWS::ApiGateway::Resource
+   Properties:
+     RestApiId: !Ref "ApiRest1"
+     ParentId: !Ref "ApiRestResource1"
+     PathPart: write
+   DependsOn:
+     - ApiRest1
+     - ApiRestResource1
+
+ ApiRestResource4:
+   Type: AWS::ApiGateway::Resource
+   Properties:
+     RestApiId: !Ref "ApiRest1"
+     ParentId:
+       Fn::GetAtt:
+         - "ApiRest1"
+         - RootResourceId
+     PathPart: lambda
+   DependsOn: ApiRest1     
+
+ ApiRestResource1Method1:
+   Type: AWS::ApiGateway::Method
+   Properties:
+     RestApiId: !Ref "ApiRest1"
+     ResourceId: !Ref "ApiRestResource2"
+     HttpMethod: GET
+     AuthorizationType: NONE
+     Integration:
+       IntegrationHttpMethod: ANY
+       PassthroughBehavior: WHEN_NO_TEMPLATES
+       TimeoutInMillis: 29000
+       Type: HTTP_PROXY
+       Uri: https://privateRESTADATAAPI.com
+   DependsOn: ApiRestResource2
+
+
+
+
+
+
+
+
+
+
+
+

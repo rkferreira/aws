@@ -1,0 +1,214 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'Test Env - Bastion'
+
+Parameters:
+
+ NetworkStackName:
+   Description: StackName for network import values
+   Type: String
+   Default: "test-networkstack"
+   
+ IamStackName:
+   Description: Iam stack name for iam instance profile
+   Type: String
+   Default: "test-iam"
+   
+ SecurityGroupsStackName:
+   Description: StackName for security groups import values 
+   Type: String
+   Default: "test-securitygroups"
+
+ BastionInstance1:
+   Description: Instance size-type for the bastion
+   Type: String
+   Default: t3.micro
+
+ BastionImageId1:
+   Description: Instance imageid for the bastion
+   Type: String
+   Default: ami-100
+
+ Ec2UserDefaultKeyName1:
+   Description: Key name for ec2-user
+   Type: String
+   Default: myuser
+
+   
+Resources:
+
+ BastionLoadBalancer1:
+   Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+   Properties:
+     IpAddressType: ipv4
+     Name: BastionLoadBalancer1
+     Scheme: internet-facing
+     LoadBalancerAttributes:
+       - Key: load_balancing.cross_zone.enabled
+         Value: true
+     Subnets:
+       -
+         Fn::ImportValue:
+           !Sub  "${NetworkStackName}-COMMONPUBLICSUBNET1"
+       -
+         Fn::ImportValue:
+           !Sub  "${NetworkStackName}-COMMONPUBLICSUBNET2"
+     Type: network
+     Tags:
+       - Key: env
+         Value: test
+
+ BastionTargetGroup1:
+   Type: AWS::ElasticLoadBalancingV2::TargetGroup
+   Properties:
+     Port: 22
+     Protocol: TCP
+     VpcId: 
+       Fn::ImportValue:
+         !Sub  "${NetworkStackName}-VPCID"
+ 
+ BastionLoadBalancerListener1:
+   Type: AWS::ElasticLoadBalancingV2::Listener
+   Properties:
+     DefaultActions:
+       - Type: forward
+         TargetGroupArn: !Ref "BastionTargetGroup1"
+     LoadBalancerArn: !Ref "BastionLoadBalancer1"
+     Port: 22
+     Protocol: TCP
+   DependsOn:
+     - BastionLoadBalancer1
+     - BastionAutoScalingGroup1
+
+ BastionAutoScalingGroup1:
+   Type: AWS::AutoScaling::AutoScalingGroup
+   Properties:
+     AutoScalingGroupName: test_env-AUTOSCALINGGROUP1
+     TargetGroupARNs:
+       - !Ref "BastionTargetGroup1"
+     LaunchConfigurationName: !Ref "BastionLaunchConfiguration1"
+     VPCZoneIdentifier:
+       - 
+         Fn::ImportValue:
+           !Sub  "${NetworkStackName}-BASTIONPRIVATESUBNET1"
+       -
+         Fn::ImportValue:
+           !Sub  "${NetworkStackName}-BASTIONPRIVATESUBNET2"
+     MinSize: 1
+     MaxSize: 1
+     DesiredCapacity: 1
+     Tags:
+       - Key: env
+         Value: test
+         PropagateAtLaunch: true
+       - Key: application
+         Value: bastion
+         PropagateAtLaunch: true
+   DependsOn:
+     - BastionLoadBalancer1
+     - BastionLaunchConfiguration1
+     
+ BastionLaunchConfiguration1:
+   Type: AWS::AutoScaling::LaunchConfiguration
+   Properties:
+     AssociatePublicIpAddress: false
+     ImageId: !Ref "BastionImageId1"
+     KeyName: !Ref "Ec2UserDefaultKeyName1"
+     SecurityGroups:
+       -
+         Fn::ImportValue:
+           !Sub  "${SecurityGroupsStackName}-BASTIONSG1"
+     InstanceType: !Ref "BastionInstance1"
+     IamInstanceProfile:
+       Fn::ImportValue:
+         !Sub  "${IamStackName}-IAMBASTIONPROFILE1"
+     UserData:
+       Fn::Base64: !Sub |
+         #!/bin/bash -xe
+         yum update -y aws-cfn-bootstrap curl amazon-ssm-agent
+         systemctl enable amazon-ssm-agent
+         systemctl start amazon-ssm-agent
+         /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} -c default -r BastionLaunchConfiguration1 --region ${AWS::Region}
+   Metadata:
+     AWS::CloudFormation::Init:
+       config:
+         packages:
+           yum:
+             openssh-server: []
+         groups:
+           "remoteAccess":
+              gid: "1500"
+           "remoteSudos":
+              gid: "1501"
+         commands:
+           "createUsers1":
+             command: '/usr/sbin/useradd -s /bin/bash -N -m -g users -G remoteAccess,remoteSudos -d /home/myuser myuser'
+             cwd: "/tmp"
+           "createUsersSshKey1":             
+             command: '/usr/bin/mkdir -p /home/myuser/.ssh ; /usr/bin/echo $SSHKEY1 > /home/myuser/.ssh/authorized_keys ; /usr/bin/chmod 600 /home/myuser/.ssh/id_rsa.pub ; /usr/bin/chown -R myuser:users /home/myuser/ '
+             env:
+               SSHKEY1: 'ssh-rsa pubkeyhash-ammkdmfksdmfdkmfksmfsmfks myuser@domain'
+         files:
+           "/etc/ssh/sshd_config":
+             content: !Sub |
+               Port 22
+               AddressFamily inet
+               PermitRootLogin no
+               StrictModes yes
+               MaxSessions 10
+               PubkeyAuthentication yes
+               PasswordAuthentication no
+               ChallengeResponseAuthentication no
+               GSSAPIAuthentication yes
+               GSSAPICleanupCredentials no
+               HostKey /etc/ssh/ssh_host_rsa_key
+               HostKey /etc/ssh/ssh_host_ecdsa_key
+               HostKey /etc/ssh/ssh_host_ed25519_key
+               AuthorizedKeysFile .ssh/authorized_keys
+               SyslogFacility AUTHPRIV
+               UsePAM yes
+               X11Forwarding no
+               PermitTunnel yes
+               AcceptEnv LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES
+               AcceptEnv LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT
+               AcceptEnv LC_IDENTIFICATION LC_ALL LANGUAGE
+               AcceptEnv XMODIFIERS
+               Subsystem       sftp    /usr/lib/openssh/sftp-server
+               AllowGroups remoteAccess ec2-user               
+             mode: "000600"
+             owner: "root"
+             group: "root"
+                 
+           "/etc/sudoers.d/remoteSudos":
+             content: !Sub |
+               %remoteSudos      ALL=(ALL) NOPASSWD:ALL
+             mode: "000600"
+             owner: "root"
+             group: "root"
+
+
+Outputs:
+
+ BastionAutoScalingGroup1:
+   Description: Bastion auto scaling group
+   Value: !Ref "BastionAutoScalingGroup1"
+   Export:
+     Name: !Sub "${AWS::StackName}-BASTIONASG1"
+     
+ BastionLaunchConfiguration1:
+   Description: Bastion auto scaling group
+   Value: !Ref "BastionLaunchConfiguration1"
+   Export:
+     Name: !Sub "${AWS::StackName}-BASTIONLC1"
+
+ BastionLoadBalancer1:
+   Description: Bastion load balancer
+   Value: !Ref "BastionLoadBalancer1"
+   Export:
+     Name: !Sub "${AWS::StackName}-BASTIONLB1"
+
+ BastionLoadBalancerDnsName1:
+   Description: Bastion load balancer dnsname
+   Value: !GetAtt "BastionLoadBalancer1.DNSName"
+   Export:
+     Name: !Sub "${AWS::StackName}-BASTIONLBDNSNAME1"

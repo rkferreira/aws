@@ -1,0 +1,151 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: 'Test Env - IAM'
+
+Resources:
+
+ BaseRole1: 
+   Type: AWS::IAM::Role
+   Properties:
+     RoleName: elasticbeanstalk-role1
+     AssumeRolePolicyDocument: 
+       Version: "2012-10-17"
+       Statement: 
+         -
+           Effect: "Allow"
+           Principal: 
+             Service: 
+               - "ec2.amazonaws.com"
+           Action: 
+             - "sts:AssumeRole"
+     ManagedPolicyArns:
+       - arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier
+       - arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker
+       - arn:aws:iam::aws:policy/AWSElasticBeanstalkWorkerTier
+       - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+
+ BaseIamPolicy1:
+   Type: AWS::IAM::ManagedPolicy
+   Properties:
+     Description: Policy for ec2 base host
+     ManagedPolicyName: elasticbeanstalk-ec2-policy1
+     PolicyDocument:
+       "Version": "2012-10-17"
+       "Statement":
+         -
+           "Effect": "Allow"
+           "Action":
+             - "ec2:DescribeTags"
+           Resource: "*"
+     Roles:
+       - Ref: "BaseRole1"
+   DependsOn: BaseRole1
+
+ BaseIamInstanceProfile1:
+   Type: AWS::IAM::InstanceProfile
+   Properties: 
+     Roles: 
+       - !Ref "BaseRole1"
+     InstanceProfileName: elasticbeanstalk-ec2-profile1
+   DependsOn: BaseRole1
+
+ BastionRole1:
+   Type: AWS::IAM::Role
+   Properties:
+     RoleName: autoscaling-bastion-role1
+     AssumeRolePolicyDocument:
+       Version: "2012-10-17"
+       Statement:
+         -
+           Effect: "Allow"
+           Principal:
+             Service:
+               - "ec2.amazonaws.com"
+           Action:
+             - "sts:AssumeRole"
+     ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+
+ BastionIamPolicy1:
+   Type: AWS::IAM::ManagedPolicy
+   Properties:
+     Description: Policy for Bastion host
+     ManagedPolicyName: autoscaling-bastion-policy1
+     PolicyDocument:
+       "Version": "2012-10-17"
+       "Statement":
+         -
+           "Effect": "Allow"
+           "Action":
+             - "ec2:DisassociateAddress"
+             - "ec2:AssociateAddress"
+           Resource: "*"
+     Roles:
+       - Ref: "BastionRole1"
+   DependsOn: BastionRole1
+
+ BastionIamInstanceProfile1:
+   Type: AWS::IAM::InstanceProfile
+   Properties:
+     Roles:
+       - !Ref "BastionRole1"
+     InstanceProfileName: autoscaling-bastion-profile1
+   DependsOn:
+     - BastionRole1
+     - BastionIamPolicy1
+
+ DbRole1: 
+   Type: AWS::IAM::Role
+   Properties:
+     RoleName: elasticbeanstalk-dbrole1
+     AssumeRolePolicyDocument: 
+       Version: "2012-10-17"
+       Statement: 
+         -
+           Effect: "Allow"
+           Principal: 
+             Service: 
+               - "monitoring.rds.amazonaws.com"
+           Action: 
+             - "sts:AssumeRole"
+     ManagedPolicyArns:
+       - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+
+
+Outputs:
+
+ BaseRole1:
+   Description:  base elastic beanstalk role
+   Value: !Ref "BaseRole1"
+   Export:
+     Name: !Sub "${AWS::StackName}-IAMBASEROLE1"
+
+ BaseIamInstanceProfile1:
+   Description:  base elastic beanstalk instance profile
+   Value: !Ref "BaseIamInstanceProfile1"
+   Export:
+     Name: !Sub "${AWS::StackName}-IAMBASEEC2PROFILE1"
+
+ BastionRole1:
+   Description:  bastion role
+   Value: !Ref "BastionRole1"
+   Export:
+     Name: !Sub "${AWS::StackName}-IAMBASTIONROLE1"
+
+ BastionIamInstanceProfile1:
+   Description:  bastion instance profile
+   Value: !Ref "BastionIamInstanceProfile1"
+   Export:
+     Name: !Sub "${AWS::StackName}-IAMBASTIONPROFILE1"
+
+ DbRole1:
+   Description:  db role
+   Value: !Ref "DbRole1"
+   Export:
+     Name: !Sub "${AWS::StackName}-IAMDBROLE1"
+
+ DbRoleArn1:
+   Description:  db role arn
+   Value: !GetAtt "DbRole1.Arn"
+   Export:
+     Name: !Sub "${AWS::StackName}-IAMDBROLEARN1"

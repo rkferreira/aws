@@ -1,0 +1,215 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'Test Env - Security Groups'
+
+Parameters:
+
+ NetworkStackName:
+   Description: StackName for network import values
+   Type: String
+   Default: "test-networkstack"
+
+ HttpPort1:
+   Description: Http port
+   Type: String
+   Default: 80
+
+ HttpsPort1:
+   Description: Https port
+   Type: String
+   Default: 443
+    
+ PgsqlPort1:
+   Description: Https port
+   Type: String
+   Default: 5432
+
+ SshPort1:
+   Description: Https port
+   Type: String
+   Default: 22
+
+ AnyIp:
+   Description: Any Ip
+   Type: String
+   Default: 0.0.0.0/0
+
+ AnyIpVpc1:
+   Description: Any Ip from VPC1
+   Type: String
+   Default: 10.2.0.0/23
+
+ OfficeIp1:
+   Description: Office IP
+   Type: String
+   Default: 200.200.200.200/32
+
+
+Resources:
+
+ WebSg1:
+   Type: AWS::EC2::SecurityGroup
+   Properties:
+     GroupDescription: Allow http to client host
+     VpcId:
+       Fn::ImportValue:
+         !Sub "${NetworkStackName}-VPCID"
+     SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: !Ref "HttpPort1"
+         ToPort: !Ref "HttpPort1"
+         CidrIp: !Ref "AnyIp"
+       - IpProtocol: tcp
+         FromPort: !Ref "HttpsPort1"
+         ToPort: !Ref "HttpsPort1"
+         CidrIp: !Ref "AnyIp"
+       - IpProtocol: icmp
+         FromPort: 8
+         ToPort: -1
+         CidrIp: !Ref "AnyIp"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-WEBSG1
+
+ LbSg1:
+   Type: AWS::EC2::SecurityGroup
+   Properties:
+     GroupDescription: Load balancer security group
+     VpcId:
+       Fn::ImportValue:
+         !Sub "${NetworkStackName}-VPCID"
+     SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: !Ref "HttpPort1"
+         ToPort: !Ref "HttpPort1"
+         CidrIp: !Ref "AnyIp"
+       - IpProtocol: tcp
+         FromPort: !Ref "HttpsPort1"
+         ToPort: !Ref "HttpsPort1"
+         CidrIp: !Ref "AnyIp"
+       - IpProtocol: icmp
+         FromPort: 8
+         ToPort: -1
+         CidrIp: !Ref "AnyIp"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-LBSG1
+
+ DbSg1:
+   Type: AWS::EC2::SecurityGroup
+   Properties:
+     GroupDescription: Allow db to client host
+     VpcId:
+       Fn::ImportValue:
+         !Sub "${NetworkStackName}-VPCID"
+     SecurityGroupEgress:
+       - IpProtocol: tcp
+         FromPort: !Ref "PgsqlPort1"
+         ToPort: !Ref "PgsqlPort1"
+         CidrIp: !Ref "AnyIp"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-DBSG1
+         
+ DbSg2:
+   Type: AWS::EC2::SecurityGroup
+   Properties:
+     GroupDescription: Allow connections to DB server
+     VpcId:
+       Fn::ImportValue:
+         !Sub "${NetworkStackName}-VPCID"
+     SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: !Ref "PgsqlPort1"
+         ToPort: !Ref "PgsqlPort1"
+         CidrIp: !Ref "AnyIp"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-DBSG2          
+ 
+ LbBastionSg1:
+   Type: AWS::EC2::SecurityGroup
+   Properties:
+     GroupDescription: Allow SSH connections to bastion load balancer
+     VpcId:
+       Fn::ImportValue:
+         !Sub "${NetworkStackName}-VPCID"
+     SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: !Ref "SshPort1"
+         ToPort: !Ref "SshPort1"
+         CidrIp: !Ref "OfficeIp1"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-LBBASTIONSG1
+
+ BastionSg1:
+   Type: AWS::EC2::SecurityGroup
+   Properties:
+     GroupDescription: Allow SSH connections to bastion
+     VpcId:
+       Fn::ImportValue:
+         !Sub "${NetworkStackName}-VPCID"
+     SecurityGroupIngress:
+       - IpProtocol: tcp
+         FromPort: !Ref "SshPort1"
+         ToPort: !Ref "SshPort1"
+         CidrIp: !Ref "OfficeIp1"
+       - IpProtocol: tcp
+         FromPort: !Ref "SshPort1"
+         ToPort: !Ref "SshPort1"
+         CidrIp: !Ref "AnyIpVpc1"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: Name
+         Value: test_env-BASTIONSG1
+
+
+Outputs:
+
+ WebSg1:
+   Description: Web Security Group 1
+   Value: !Ref "WebSg1"
+   Export:
+     Name: !Sub "${AWS::StackName}-WEBSG1"
+
+ LbSg1:
+   Description: Load Balancer Security Group 1
+   Value: !Ref "LbSg1"
+   Export:
+     Name: !Sub "${AWS::StackName}-LBSG1"
+
+ DbSg1:
+   Description: Db Security Group 1
+   Value: !Ref "DbSg1"
+   Export:
+     Name: !Sub "${AWS::StackName}-DBSG1"
+
+ DbSg2:
+   Description: Db server Security Group
+   Value: !Ref "DbSg2"
+   Export:
+     Name: !Sub "${AWS::StackName}-DBSG2"
+
+ LbBastionSg1:
+   Description: Bastion load balancer Security Group
+   Value: !Ref "LbBastionSg1"
+   Export:
+     Name: !Sub "${AWS::StackName}-LBBASTIONSG1"
+
+ BastionSg1:
+   Description: Bastion server Security Group
+   Value: !Ref "BastionSg1"
+   Export:
+     Name: !Sub "${AWS::StackName}-BASTIONSG1"

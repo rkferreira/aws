@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'Test Env - Database Stack'
+
+Parameters:
+
+ NetworkStackName:
+   Description: StackName for network import values
+   Type: String
+   Default: "test-networkstack"
+
+ SecurityGroupsStackName:
+   Description: StackName for security groups import values
+   Type: String
+   Default: "test-securitygroups"
+
+ IamStackName:
+   Description: Iam stack name for iam instance profile
+   Type: String
+   Default: "test-iam"   
+
+ DbSnapshot1:
+   Description: Provide a valid DB snapshot ARN, if you want to restore from snapshot
+   Type: String
+   Default: ""
+
+ DbName1:
+   Description: Database name. Ignored if using snapshot.
+   Type: String
+   Default: testpgsqldb
+
+ DbAllocatedStorage1:
+   Description: Allocated storage size for database
+   Type: String
+   Default: 20
+   
+ DbInstance1:
+   Description: Instance size-type for the databases
+   Type: String
+   Default: db.t3.micro
+
+ DbUser1:
+   Description: Username for database. Ignored if using snapshot.
+   Type: String
+   Default: user
+
+ DbPass1:
+   Description: Password for database. Ignored if using snapshot.
+   Type: String
+   Default: '{{resolve:ssm:test_env-db-password:1}}'
+
+
+Conditions: 
+ RestoreFromSnapshot:
+   !Not [!Equals [!Ref "DbSnapshot1", ""]]
+
+
+Resources:
+
+ Pgsql1DbSubnetGroup: 
+    Type: AWS::RDS::DBSubnetGroup
+    Properties: 
+      DBSubnetGroupDescription: Pgsql1 database subnet group
+      SubnetIds:
+        -
+          Fn::ImportValue:
+            !Sub "${NetworkStackName}-DBPRIVATESUBNET1"
+        -
+          Fn::ImportValue:
+            !Sub "${NetworkStackName}-DBPRIVATESUBNET2"
+      Tags:
+        - Key: env
+          Value: test
+
+ Pgsql1: 
+   Type: AWS::RDS::DBInstance
+   Properties:
+     AutoMinorVersionUpgrade: true
+     AllowMajorVersionUpgrade: false
+     DBName:
+       !If [RestoreFromSnapshot, !Ref "AWS::NoValue", !Ref "DbName1"] 
+     DBInstanceIdentifier: !Ref "DbName1"
+     AllocatedStorage: !Ref "DbAllocatedStorage1"
+     DBInstanceClass: !Ref "DbInstance1"
+     Engine: postgres
+     EngineVersion: "10.6"
+     MonitoringInterval: 60
+     MonitoringRoleArn:
+       Fn::ImportValue:
+         !Sub "${IamStackName}-IAMDBROLEARN1"
+     EnablePerformanceInsights: true
+     PerformanceInsightsRetentionPeriod: 7
+     MasterUsername:
+       !If [RestoreFromSnapshot, !Ref "AWS::NoValue", !Ref "DbUser1"]
+     MasterUserPassword:
+       !If [RestoreFromSnapshot, !Ref "AWS::NoValue", !Ref "DbPass1"]     
+     PubliclyAccessible: false
+     DBSnapshotIdentifier:
+       !If [RestoreFromSnapshot, !Ref "DbSnapshot1", !Ref "AWS::NoValue"]
+     VPCSecurityGroups:
+       -
+         Fn::ImportValue:
+           !Sub "${SecurityGroupsStackName}-DBSG2"
+     DBSubnetGroupName: !Ref "Pgsql1DbSubnetGroup"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: platform
+         Value: database
+   DeletionPolicy: Snapshot
+
+
+Outputs:
+
+ Pgsql1DbSubnetGroup:
+   Description: Pgsql Subnet Group
+   Value: !Ref "Pgsql1DbSubnetGroup"
+   Export:
+     Name: !Sub "${AWS::StackName}-PGSQL1DBSUBNETGROUP"
+     
+ Pgsql1:
+   Description: Pgsql database
+   Value: !Ref "Pgsql1"
+   Export:
+     Name: !Sub "${AWS::StackName}-PGSQL1"
+
+ Pgsql1EndPoint:
+   Description: Pgsql database Endpoint Address
+   Value: !GetAtt "Pgsql1.Endpoint.Address"
+   Export:
+     Name: !Sub "${AWS::StackName}-PGSQL1ENDPOINTADDR"
+
+ Pgsql1EndPointPort:
+   Description: Pgsql database Endpoint Port
+   Value: !GetAtt "Pgsql1.Endpoint.Port"
+   Export:
+     Name: !Sub "${AWS::StackName}-PGSQL1ENDPOINTPORT"

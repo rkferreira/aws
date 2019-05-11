@@ -1,0 +1,239 @@
+Description: 'Test Env - App Elastic Beanstalk'
+
+Parameters:
+
+ NetworkStackName:
+   Description: StackName for network import values 
+   Type: String
+   Default: "test-networkstack"
+
+ SecurityGroupsStackName:
+   Description: StackName for security groups import values 
+   Type: String
+   Default: "test-securitygroups"
+ 
+ DatabaseStackName:
+   Description: Database stack name for springdsurl
+   Type: String
+   Default: "test-database"
+ 
+ IamStackName:
+   Description: Iam stack name for iam instance profile
+   Type: String
+   Default: "test-iam"
+
+ Azs:
+   Description: 'Availability zone 1'
+   Type: List<AWS::EC2::AvailabilityZone::Name>
+   Default: "eu-west-1a,eu-west-1b"   
+
+ EbsAppName:
+   Description: Application name for Elastic Beanstalk
+   Type: String
+   Default: RestDataApi-1
+   
+ EbsEnvName:
+   Description: Name of the Elastic Beanstalk Environment
+   Type: String
+   Default: RestDataApi-1
+ 
+ EbsCnamePrefix:
+   Description: CNAMEPrefix for Elastic Beanstalk App
+   Type: String
+   Default: restdataapi-aws
+ 
+ SpringProfileActive:
+   Description: SPRING_PROFILES_ACTIVE
+   Type: String
+   Default: test
+
+ SpringDsPassword:
+   Description: spring.datasource.password. If nothing, will get from SSM
+   Type: String
+   Default: ""
+
+ SpringDsUsername:
+   Description: spring.datasource.username.
+   Type: String
+   Default: password
+
+ SpringDsUrlDb:
+   Description: 'Database name for the spring.datasource.url paramenter. By default: /test'
+   Type: String
+   Default: '/test'
+ 
+ SpringDsUrl:
+   Description: spring.datasource.url. Empty by default, just need to specify if differs from the linked database stack.
+   Type: String
+   Default: ""
+
+ IamInstanceProfile:
+   Description: Role to be used with Elastic Beanstalk instances. By default from IAM stack
+   Type: String
+   Default: ""
+
+ LbCertificate:
+   Description: ARN of SSL certificate to be used on load balancer https
+   Type: String
+   Default: 'arn:aws:acm:eu-usa-1:100:certificate/100'
+
+   
+Conditions:
+
+ SetSrpingDsPassword:
+   !Not [!Equals [!Ref "SpringDsPassword", ""]]
+
+ SetIamInstanceProfile:
+   !Not [!Equals [!Ref "IamInstanceProfile", ""]]
+ 
+ SetDefaultSpringUrl:
+   !Equals [!Ref "SpringDsUrl", ""]
+
+
+Resources:
+
+ RestDataApi1App:
+   Type: AWS::ElasticBeanstalk::Application
+   Properties:
+     ApplicationName: !Ref "EbsAppName"
+
+ RestDataApi1ConfigTemplate:
+   Type: AWS::ElasticBeanstalk::ConfigurationTemplate
+   Properties:
+     ApplicationName: !Ref "RestDataApi1App"
+     Description: 'AWS ElasticBeanstalk RestDataApi1 Configuration Template'
+     SolutionStackName: '64bit Amazon Linux 2018.03 v2.8.1 running Java 8'
+     OptionSettings:
+       - Namespace: 'aws:autoscaling:launchconfiguration'
+         OptionName: InstanceType
+         Value: t3.micro
+       - Namespace: 'aws:autoscaling:launchconfiguration'
+         OptionName: IamInstanceProfile
+         Value:
+           !If [SetIamInstanceProfile, !Ref "IamInstanceProfile", "Fn::ImportValue" : {"Fn::Sub":'${IamStackName}-IAMBASEEC2PROFILE1'}]
+       - Namespace: 'aws:autoscaling:launchconfiguration'
+         OptionName: MonitoringInterval
+         Value: 1 minute
+       - Namespace: 'aws:autoscaling:launchconfiguration'
+         OptionName: SecurityGroups
+         Value:
+           !Join [",", [ "Fn::ImportValue" : {"Fn::Sub":'${SecurityGroupsStackName}-WEBSG1'}, "Fn::ImportValue" : {"Fn::Sub":'${SecurityGroupsStackName}-DBSG1'} ]]
+       - Namespace: 'aws:elasticbeanstalk:application:environment'
+         OptionName: GRADLE_HOME
+         Value: /usr/local/gradle
+       - Namespace: 'aws:elasticbeanstalk:application:environment'
+         OptionName: JAVA_HOME
+         Value: /usr/lib/jvm/java
+       - Namespace: 'aws:elasticbeanstalk:application:environment'
+         OptionName: M2
+         Value: /usr/local/apache-maven/bin
+       - Namespace: 'aws:elasticbeanstalk:application:environment'
+         OptionName: M2_HOME
+         Value: /usr/local/apache-maven
+       - Namespace: 'aws:elasticbeanstalk:application:environment'
+         OptionName: SERVER_PORT
+         Value: "5000"
+       - Namespace: 'aws:elasticbeanstalk:application:environment'
+         OptionName: SPRING_PROFILES_ACTIVE
+         Value: !Ref "SpringProfileActive"
+       - Namespace: 'aws:elasticbeanstalk:application:environment'
+         OptionName: spring.datasource.username
+         Value: !Ref "SpringDsUsername"
+       - Namespace: 'aws:elasticbeanstalk:application:environment'
+         OptionName: spring.datasource.password
+         Value:
+           !If [SetSrpingDsPassword, !Ref "SpringDsPassword", '{{resolve:ssm:test_env-db-password:1}}']
+       - Namespace: 'aws:elasticbeanstalk:application:environment'
+         OptionName: spring.datasource.url
+         Value:
+           !If [SetDefaultSpringUrl, !Join ["", [ "jdbc:postgresql://", "Fn::ImportValue" : {"Fn::Sub":'${DatabaseStackName}-PGSQL1ENDPOINTADDR'}, ":", "Fn::ImportValue" : {"Fn::Sub":'${DatabaseStackName}-PGSQL1ENDPOINTPORT'}, "Ref":"SpringDsUrlDb"]], !Ref "SpringDsUrl"]
+       - Namespace: 'aws:autoscaling:asg'
+         OptionName: MinSize
+         Value: "1"
+       - Namespace: 'aws:autoscaling:asg'
+         OptionName: MaxSize
+         Value: "1"
+       - Namespace: 'aws:autoscaling:updatepolicy:rollingupdate'
+         OptionName: RollingUpdateEnabled
+         Value: false
+       - Namespace: 'aws:elasticbeanstalk:command'
+         OptionName: DeploymentPolicy
+         Value: AllAtOnce
+       - Namespace: 'aws:elasticbeanstalk:environment'
+         OptionName: ServiceRole
+         Value: aws-elasticbeanstalk-service-role
+       - Namespace: 'aws:elasticbeanstalk:environment'
+         OptionName: EnvironmentType
+         Value: LoadBalanced
+       - Namespace: 'aws:elasticbeanstalk:environment'
+         OptionName: LoadBalancerType
+         Value: application
+       - Namespace: 'aws:ec2:vpc'
+         OptionName: VPCId
+         Value:
+           Fn::ImportValue:
+             !Sub "${NetworkStackName}-VPCID"
+       - Namespace: 'aws:ec2:vpc'
+         OptionName: Subnets
+         Value:
+           !Join [",", [ "Fn::ImportValue" : {"Fn::Sub":'${NetworkStackName}-WEBPRIVATESUBNET1'}, "Fn::ImportValue" : {"Fn::Sub":'${NetworkStackName}-WEBPRIVATESUBNET2'} ]]
+       - Namespace: 'aws:ec2:vpc'
+         OptionName: ELBSubnets
+         Value:
+           !Join [",", [ "Fn::ImportValue" : {"Fn::Sub":'${NetworkStackName}-LBPRIVATESUBNET1'}, "Fn::ImportValue" : {"Fn::Sub":'${NetworkStackName}-LBPRIVATESUBNET2'} ]]
+       - Namespace: 'aws:ec2:vpc'
+         OptionName: ELBScheme
+         Value: internal
+       - Namespace: 'aws:ec2:vpc'
+         OptionName: AssociatePublicIpAddress
+         Value: false
+       - Namespace: 'aws:elasticbeanstalk:xray'
+         OptionName: XRayEnabled
+         Value: false
+       - Namespace: 'aws:elbv2:loadbalancer'
+         OptionName: SecurityGroups
+         Value:
+           Fn::ImportValue:
+             !Sub "${SecurityGroupsStackName}-LBSG1"
+       - Namespace: 'aws:elbv2:listener:443'
+         OptionName: ListenerEnabled
+         Value: true
+       - Namespace: 'aws:elbv2:listener:443'
+         OptionName: Protocol
+         Value: HTTPS
+       - Namespace: 'aws:elbv2:listener:443'
+         OptionName: SSLCertificateArns
+         Value: !Ref "LbCertificate"
+       - Namespace: 'aws:elasticbeanstalk:healthreporting:system'
+         OptionName: SystemType
+         Value: enhanced
+       - Namespace: 'aws:elasticbeanstalk:cloudwatch:logs:health'
+         OptionName: HealthStreamingEnabled
+         Value: true
+       - Namespace: 'aws:elasticbeanstalk:cloudwatch:logs'
+         OptionName: StreamLogs
+         Value: true
+
+
+ RestDataApi1Environment:
+   Type: AWS::ElasticBeanstalk::Environment
+   Properties:
+     Description: RestDataApi Elastic Beanstalk
+     EnvironmentName: !Ref "EbsEnvName"
+     CNAMEPrefix: !Ref "EbsCnamePrefix"
+     ApplicationName: !Ref "RestDataApi1App"
+     TemplateName: !Ref "RestDataApi1ConfigTemplate"
+     Tags:
+       - Key: env
+         Value: test
+       - Key: application
+         Value: backend
+
+
+Outputs:
+
+ RestDataApi1Environment:
+   Description: db role arn
+   Value: !GetAtt "RestDataApi1Environment.EndpointURL"
+   Export:
+     Name: !Sub "${AWS::StackName}-RESTDATAAPIENDPOINT"
