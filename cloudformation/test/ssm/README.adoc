@@ -1,0 +1,143 @@
+## Get bastion instance-id
+#
+aws ec2 describe-instances --filter Name=tag:application,Values=bastion --query "Reservations[*].Instances[*].[InstanceId]"
+....
+[
+    [
+        [
+            "i-0a74e8d77c1fd9111"
+        ]
+    ]
+]
+....
+
+## List SSM documents
+#
+aws ssm list-documents --document-filter-list --document-filter-list key=Name,value=ssm-ec2
+
+
+## Run ssm document for bastion instanceid
+#
+aws ssm send-command --document-name "ssm-ec2-ec2ListUsers-1KV49DP5B4UEB" --instance-ids 'i-0cf3e4b89017cd911'
+....
+{
+    "Command": {
+        "MaxErrors": "0",
+        "Parameters": {},
+        "DocumentName": "ssm-ec2-ec2ListUsers-1KV49DP5B4UEB",
+        "OutputS3BucketName": "",
+        "OutputS3KeyPrefix": "",
+        "StatusDetails": "Pending",
+        "RequestedDateTime": 1571144787.67,
+        "Status": "Pending",
+        "TargetCount": 1,
+        "NotificationConfig": {
+            "NotificationArn": "",
+            "NotificationEvents": [],
+            "NotificationType": ""
+        },
+        "InstanceIds": [
+            "i-0cf3e4b89017cd911"
+        ],
+        "ErrorCount": 0,
+        "MaxConcurrency": "50",
+        "ServiceRole": "",
+        "CloudWatchOutputConfig": {
+            "CloudWatchLogGroupName": "",
+            "CloudWatchOutputEnabled": false
+        },
+        "DocumentVersion": "",
+        "CompletedCount": 0,
+        "Comment": "",
+        "ExpiresAfter": 1571151987.67,
+        "DeliveryTimedOutCount": 0,
+        "CommandId": "3bf1a16c-1ce1-41c1-b55a-fc0ee5d64418",
+        "Targets": []
+    }
+}
+....
+
+## Check result for the ssm document ran
+#
+aws ssm list-command-invocations --command-id "3bf1a16c-1ce1-41c1-b55a-fc0ee5d64418" --details --query "CommandInvocations[*].CommandPlugins[*].Output[]" --output text
+....
+root:x:0:0:root:/root:/bin/bash
+bin:x:1:1:bin:/bin:/sbin/nologin
+daemon:x:2:2:daemon:/sbin:/sbin/nologin
+adm:x:3:4:adm:/var/adm:/sbin/nologin
+lp:x:4:7:lp:/var/spool/lpd:/sbin/nologin
+sync:x:5:0:sync:/sbin:/bin/sync
+shutdown:x:6:0:shutdown:/sbin:/sbin/shutdown
+halt:x:7:0:halt:/sbin:/sbin/halt
+mail:x:8:12:mail:/var/spool/mail:/sbin/nologin
+operator:x:11:0:operator:/root:/sbin/nologin
+games:x:12:100:games:/usr/games:/sbin/nologin
+ftp:x:14:50:FTP User:/var/ftp:/sbin/nologin
+rpcuser:x:29:29:RPC Service User:/var/lib/nfs:/sbin/nologin
+rpc:x:32:32:Rpcbind Daemon:/var/lib/rpcbind:/sbin/nologin
+tcpdump:x:72:72::/:/sbin/nologin
+sshd:x:74:74:Privilege-separated SSH:/var/empty/sshd:/sbin/nologin
+dbus:x:81:81:System message bus:/:/sbin/nologin
+postfix:x:89:89::/var/spool/postfix:/sbin/nologin
+nobody:x:99:99:Nobody:/:/sbin/nologin
+systemd-network:x:192:192:systemd Network Management:/:/sbin/nologin
+chrony:x:997:995::/var/lib/chrony:/sbin/nologin
+ec2-instance-connect:x:998:996::/home/ec2-instance-connect:/sbin/nologin
+libstoragemgmt:x:999:997:daemon account for libstoragemgmt:/var/run/lsm:/sbin/nologin
+ec2-user:x:1000:1000:EC2 Default User:/home/ec2-user:/bin/bash
+....
+
+
+## Add users to bastion
+#
+aws ssm send-command --document-name "ssm-ec2-ec2AddUser-1N4LDR0PV7LGN" --instance-ids 'i-0cf3e4b89017cd911' --parameters username=test3,sshPubKey='ssh-rsa f54ds1sd451fds54f1s rodrigo.kellermann@domain.com'
+....
+{
+    "Command": {
+        "MaxErrors": "0",
+        "Parameters": {
+            "username": [
+                "test3"
+            ],
+            "sshPubKey": [
+                "ssh-rsa f54ds1sd451fds54f1s rodrigo.kellermann@domain.com"
+            ]
+        },
+        "DocumentName": "ssm-ec2-ec2AddUser-1N4LDR0PV7LGN",
+        "OutputS3BucketName": "",
+        "OutputS3KeyPrefix": "",
+        "StatusDetails": "Pending",
+        "RequestedDateTime": 1571145801.22,
+        "Status": "Pending",
+        "TargetCount": 1,
+        "NotificationConfig": {
+            "NotificationArn": "",
+            "NotificationEvents": [],
+            "NotificationType": ""
+        },
+        "InstanceIds": [
+            "i-0cf3e4b89017cd911"
+        ],
+        "ErrorCount": 0,
+        "MaxConcurrency": "50",
+        "ServiceRole": "",
+        "CloudWatchOutputConfig": {
+            "CloudWatchLogGroupName": "",
+            "CloudWatchOutputEnabled": false
+        },
+        "DocumentVersion": "",
+        "CompletedCount": 0,
+        "Comment": "",
+        "ExpiresAfter": 1571153001.22,
+        "DeliveryTimedOutCount": 0,
+        "CommandId": "df40cf1b-af70-4612-b99a-c7b10c803d90",
+        "Targets": []
+    }
+}
+....
+
+## Check result
+#
+aws ssm list-command-invocations --command-id "df40cf1b-af70-4612-b99a-c7b10c803d90" --details --query "CommandInvocations[*].CommandPlugins[*].Output[]" --output text
+  # there is nothing to output when its OK.
+

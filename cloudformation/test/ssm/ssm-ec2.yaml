@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'Test Env - Ec2 SSM documents'
+
+Parameters: {}
+
+Resources:
+
+  ec2ListUsers: 
+    Type: "AWS::SSM::Document"
+    Properties:
+      DocumentType: Command
+      Content: 
+        schemaVersion: '2.2'
+        description: 'list ec2 users'
+        parameters: {}
+        mainSteps:
+          - 
+            action: aws:runShellScript
+            name: ec2ListUsers
+            inputs:
+              workingDirectory: /tmp
+              timeoutSeconds: 120
+              runCommand:
+                - /usr/bin/sh -c '/usr/bin/sort -n -t ':' -k3 /etc/passwd'
+
+  ec2AddUser: 
+    Type: "AWS::SSM::Document"
+    Properties:
+      DocumentType: Command
+      Content: 
+        schemaVersion: '2.2'
+        description: 'ec2 add user'
+        parameters:
+          username:
+            type: String
+            default: ""
+            description: "username of the new user"
+          sshPubKey:
+            type: String
+            description: "ssh public key of user"
+          usergroup:
+            type: String
+            default: "remoteAccess"
+            description: "user extra groups for bastion access"
+            allowedValues:
+              - "remoteAccess"
+              - "remoteAccess,remoteSudos"
+        mainSteps:
+          - 
+            action: aws:runShellScript
+            name: ec2AddUser
+            inputs:
+              workingDirectory: /tmp
+              timeoutSeconds: 120
+              runCommand:
+                - /usr/bin/sudo /usr/sbin/useradd -s /bin/bash -N -m -g users -G {{ usergroup }} -d /home/{{ username }} {{ username }}
+                - /usr/bin/sudo /usr/bin/mkdir -p /home/{{ username }}/.ssh
+                - /usr/bin/sudo /usr/bin/echo "{{ sshPubKey }}" > /home/{{ username }}/.ssh/authorized_keys
+                - /usr/bin/sudo /usr/bin/chown -R {{ username }}:users /home/{{ username }}/
