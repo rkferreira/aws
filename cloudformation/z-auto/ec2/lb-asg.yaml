@@ -1,0 +1,228 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'LoadBalancer ASG'
+
+Parameters:
+
+ Azs:
+   Description: 'Availability zones.'
+   Type: List<AWS::EC2::AvailabilityZone::Name>
+
+ VpcIdE:
+   Description: 'Existing VPC id.'
+   Type: List<AWS::EC2::VPC::Id>
+
+ LbSubnetIds:
+   Description: 'Load balancer public subnet ids.'
+   Type: List<AWS::EC2::Subnet::Id>
+
+ SubnetIds:
+   Description: 'Ec2 internal Existing Subnets id.'
+   Type: List<AWS::EC2::Subnet::Id>
+
+ LoadBalancerName:
+   Description: 'Lb name'
+   Type: String
+
+ SslARNId:
+   Description: 'SSL cert ARN id.'
+   Type: String
+   Default: 'arn:aws:acm:us-east-1:00000:certificate/00000000000000'
+
+ SgMgmt:
+   Description: 'SG_MGMT security group id'
+   Type: String
+   Default: 'sg-00000000'
+
+Resources:
+
+ SecGroup1:
+   Type: AWS::EC2::SecurityGroup
+   Properties:
+     GroupDescription: 'Load balancer rules'
+     SecurityGroupIngress: 
+       - IpProtocol: tcp
+         FromPort: 80
+         ToPort: 80
+         CidrIp: 0.0.0.0/0
+       - IpProtocol: tcp
+         FromPort: 443
+         ToPort: 443
+         CidrIp: 0.0.0.0/0
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: PUBLB1-SG1
+
+ SecGroup2:
+   Type: AWS::EC2::SecurityGroup
+   Properties: 
+     GroupDescription: 'EC2 rules'
+     SecurityGroupIngress: 
+       - IpProtocol: tcp
+         FromPort: 5000
+         ToPort: 5000
+         CidrIp: 0.0.0.0/0
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: INT-SG2
+
+ Asg1:
+   Type: AWS::AutoScaling::AutoScalingGroup
+   UpdatePolicy:
+     AutoScalingRollingUpdate:
+       MaxBatchSize: '1'
+       MinInstancesInService: '1'
+       MinSuccessfulInstancesPercent: '99'
+       PauseTime: PT5M
+       WaitOnResourceSignals: 'true'
+       SuspendProcesses:
+         - HealthCheck
+         - ReplaceUnhealthy
+         - AZRebalance
+         - AlarmNotification
+         - ScheduledActions
+   Properties:
+     AvailabilityZones: !Ref "Azs"
+     VPCZoneIdentifier: !Ref "SubnetIds"
+     MinSize: '1'
+     MaxSize: '10'
+     TargetGroupARNs:
+       - !Ref "Tg1"
+     LaunchTemplate:
+       LaunchTemplateId: !Ref "Lt1"
+       Version: !GetAtt Lt1.LatestVersionNumber
+   DependsOn:
+     - Lt1
+     - Tg1
+     - LoadBalancer1
+
+ Lt1:
+   Type: AWS::EC2::LaunchTemplate
+   Properties:
+     LaunchTemplateName: 'lt1'
+     LaunchTemplateData:
+       ImageId: 'ami-000000000'
+       InstanceType: 't3.small'
+       KeyName: 'mykey'
+       SecurityGroupIds:
+         - !Ref "SgMgmt"
+         - !Ref "SecGroup2"
+       UserData:
+         'Fn::Base64': !Sub |
+            #!/bin/bash
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get -y install ldap-utils nslcd nscd net-tools python-setuptools python-pip
+
+            cd /tmp
+            wget -O /tmp/aws-cfn-bootstrap-latest.tar.gz 'https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz'
+            mkdir -p /tmp/aws-cfn-bootstrap-latest
+            tar -xvzf aws-cfn-bootstrap-latest.tar.gz --strip-components=1 -C /tmp/aws-cfn-bootstrap-latest
+            python -m easy_install aws-cfn-bootstrap-latest
+
+            systemctl restart nslcd
+            systemctl restart nscd
+            systemctl restart sshd
+
+            cfn-signal -e $? --resource Asg1 --region ${AWS::Region} --stack ${AWS::StackName}
+       TagSpecifications:
+         - 
+           ResourceType: 'instance'
+           Tags:
+             - Key: env
+               Value: prod
+             - Key: Name
+               Value: EC2-ASG
+
+ Tg1:
+   Type: AWS::ElasticLoadBalancingV2::TargetGroup
+   Properties:
+     HealthCheckEnabled: 'true'
+     HealthCheckPort: '5000'
+     HealthCheckProtocol: 'HTTP'
+     HealthCheckTimeoutSeconds: 30
+     HealthCheckIntervalSeconds: 60
+     Name: 'tg1'
+     Port: 5000
+     Protocol: 'HTTP'
+     TargetType: 'instance'
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: TG1
+
+ HTTPListener1:
+   Type: AWS::ElasticLoadBalancingV2::Listener
+   Properties:
+     LoadBalancerArn: !Ref "LoadBalancer1"
+     Port: 80
+     Protocol: 'HTTP'
+     DefaultActions:
+       - Type: 'forward'
+         TargetGroupArn: !Ref "Tg1"
+   DependsOn:
+     - LoadBalancer1
+     - Tg1
+ 
+ HTTPSListener1:
+   Type: AWS::ElasticLoadBalancingV2::Listener
+   Properties:
+     LoadBalancerArn: !Ref "LoadBalancer1"
+     Port: 443
+     Protocol: 'HTTPS'
+     Certificates:
+       - CertificateArn: !Ref "SslARNId"
+     DefaultActions:
+       - Type: 'forward'
+         TargetGroupArn: !Ref "Tg1"
+   DependsOn:
+     - LoadBalancer1
+     - Tg1
+
+ LoadBalancer1:
+   Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+   Properties: 
+     IpAddressType: 'ipv4'
+     Name: !Ref "LoadBalancerName"
+     Scheme: 'internet-facing'
+     SecurityGroups: 
+       - !Ref "SecGroup1"
+     Subnets: !Ref "LbSubnetIds"
+     Type: 'application'
+     Tags: 
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: PUBLB1
+     Type: 'application'
+   DependsOn:
+     - SecGroup1
+
+
+Outputs:
+ 
+ Loadbalancer1id:
+   Description: 'Load balancer id'
+   Value: !Ref "LoadBalancer1"
+   Export:
+     Name: !Sub "${AWS::StackName}-PUBLB1-id"
+ 
+ Loadbalancer1name:
+   Description: 'Load balancer dns name'
+   Value: !GetAtt "LoadBalancer1.DNSName"
+   Export:
+     Name: !Sub "${AWS::StackName}-PUBLB1-name"

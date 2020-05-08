@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'Kops Stack'
+
+Parameters:
+
+ PeerRequesterAccountId:
+     Type: String
+     Default: "000000" 
+
+ KopsGroup:
+   Description: 'github kops getting_started aws.md'
+   Type: String
+   Default: "kops"
+
+ KopsUser:
+   Description: 'kops user'
+   Type: String
+   Default: "kops"
+
+
+Resources:
+
+ peerRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Principal:
+              AWS: !Ref PeerRequesterAccountId
+            Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 'ec2:AcceptVpcPeeringConnection'
+                Resource: '*'
+
+
+ KopsGrp1:
+   Type: AWS::IAM::Group
+   Properties:
+     GroupName: !Ref "KopsGroup"
+     ManagedPolicyArns:
+       - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+       - arn:aws:iam::aws:policy/AmazonRoute53FullAccess
+       - arn:aws:iam::aws:policy/AmazonS3FullAccess
+       - arn:aws:iam::aws:policy/IAMFullAccess
+       - arn:aws:iam::aws:policy/AmazonVPCFullAccess
+
+ KopsUser1:
+   Type: AWS::IAM::User
+   Properties:
+     Groups:
+       - !Ref "KopsGrp1"
+     UserName: !Ref "KopsUser"
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: K8SKOPSUSER
+   DependsOn:
+     - KopsGrp1
+
+ KopsAccessKey1:
+   Type: AWS::IAM::AccessKey
+   Properties:
+     Status: Active
+     UserName: !Ref "KopsUser1"
+   DependsOn:
+     - KopsUser1
+
+
+Outputs:
+  
+ RoleARN:
+    Value: !GetAtt 
+      - peerRole
+      - Arn
+
+ KopsUser1:
+   Description: user
+   Value: !Ref "KopsUser1"
+
+ KopsGrp1:
+   Description: group
+   Value: !Ref "KopsGrp1"
+
+ KopsAccessKey1:
+   Description: key
+   Value: !Ref "KopsAccessKey1"
+
+ KopsAccessKeySecret1:
+   Description: secret
+   Value: !GetAtt KopsAccessKey1.SecretAccessKey 

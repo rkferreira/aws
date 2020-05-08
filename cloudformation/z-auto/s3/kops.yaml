@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'Kops - S3 Stack'
+
+Parameters:
+
+ KopsS3Bucket:
+   Description: 'bucket name'
+   Type: String
+   Default: "kops-state01"
+
+
+Resources:
+
+ KopsS3:
+   Type: AWS::S3::Bucket
+   Properties:
+     BucketName: !Ref "KopsS3Bucket"
+     VersioningConfiguration:
+       Status: Enabled
+     BucketEncryption:
+       ServerSideEncryptionConfiguration:
+         - ServerSideEncryptionByDefault:
+             SSEAlgorithm: AES256
+
+
+Outputs:
+
+ KopsS3:
+   Description: bucket name
+   Value: !Ref "KopsS3"
+
+ KopsS3Url:
+   Description: bucket url
+   Value: !GetAtt KopsS3.RegionalDomainName
