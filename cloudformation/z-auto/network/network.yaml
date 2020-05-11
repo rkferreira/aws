@@ -1,0 +1,416 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: 'Network Stack'
+
+Parameters:
+
+ Azs:
+   Description: 'Availability zones.'
+   Type: List<AWS::EC2::AvailabilityZone::Name>
+   Default: "us-east-1a, us-east-1b, us-east-1c"
+
+ VpcIdE:
+   Description: 'Existing VPC id.'
+   Type: List<AWS::EC2::VPC::Id>
+   Default: "vpc-000000"
+ 
+ IgwIdE:
+   Description: 'Existing Internet Gateway id.'
+   Type: String
+   Default: "igw-000000"
+ 
+ NgwIdE:
+   Description: 'Existing Nat Gateway id.'
+   Type: String
+   Default: "nat-000000"
+ 
+ TgwIdE:
+   Description: 'Existing Nat Gateway id.'
+   Type: String
+   Default: "tgw-0000000000"
+ 
+ VpcPeeringE:
+   Description: 'Existing Nat Gateway id.'
+   Type: CommaDelimitedList
+   Default: "pcx-000001, pcx-000002, pcx-000003"
+
+ K8sPrivateSubnetIpBlocks:
+   Description: '3x CIDR ranges for private subnets.'
+   Type: CommaDelimitedList
+   Default: "172.0.96.0/27, 172.0.96.32/27, 172.0.96.64/27"
+
+ K8sPublicSubnetIpBlocks:
+   Description: '3x CIDR ranges for public subnets.'
+   Type: CommaDelimitedList
+   Default: "172.0.96.96/27, 172.0.96.128/27, 172.0.96.160/27"
+
+
+Mappings:
+ TransitGwCIDRMap:
+   TransitGw1:
+     Cidr: 172.17.0.0/16
+   TransitGw2:
+     Cidr: 172.18.0.0/16
+   TransitGw3:
+     Cidr: 172.19.0.0/26
+   TransitGw4:
+     Cidr: 192.0.0.0/24
+   TransitGw5:
+     Cidr: 192.168.64.0/24
+
+
+Resources:
+
+ K8sPrivateSubnet1:
+   Type: AWS::EC2::Subnet
+   Properties: 
+     AvailabilityZone: !Select
+       - 0
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 0
+       - !Ref "K8sPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: K8SPRVSUBNET1
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+ 
+ K8sPrivateSubnet2:
+   Type: AWS::EC2::Subnet
+   Properties: 
+     AvailabilityZone: !Select
+       - 1
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 1
+       - !Ref "K8sPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: K8SPRVSUBNET2
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+
+ K8sPrivateSubnet3:
+   Type: AWS::EC2::Subnet
+   Properties: 
+     AvailabilityZone: !Select
+       - 2
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 2
+       - !Ref "K8sPrivateSubnetIpBlocks"
+     MapPublicIpOnLaunch: false
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: K8SPRVSUBNET3
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+
+ K8sPublicSubnet1:
+   Type: AWS::EC2::Subnet
+   Properties: 
+     AvailabilityZone: !Select
+       - 0
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 0
+       - !Ref "K8sPublicSubnetIpBlocks"
+     MapPublicIpOnLaunch: false
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: K8SPUBSUBNET1
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+
+ K8sPublicSubnet2:
+   Type: AWS::EC2::Subnet
+   Properties: 
+     AvailabilityZone: !Select
+       - 1
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 1
+       - !Ref "K8sPublicSubnetIpBlocks"
+     MapPublicIpOnLaunch: false
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: K8SPUBSUBNET2
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+
+ K8sPublicSubnet3:
+   Type: AWS::EC2::Subnet
+   Properties: 
+     AvailabilityZone: !Select
+       - 2
+       - !Ref "Azs"
+     CidrBlock: !Select
+       - 2
+       - !Ref "K8sPublicSubnetIpBlocks"
+     MapPublicIpOnLaunch: false
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: prod_env-K8SPUBSUBNET3
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+
+ PrivateNatRouteTable1:
+   Type: AWS::EC2::RouteTable
+   Properties:
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: K8SPRVNATROUTE01
+
+ PublicRouteTable1:
+   Type: AWS::EC2::RouteTable
+   Properties:
+     VpcId: !Select
+       - 0
+       - !Ref "VpcIdE"
+     Tags:
+       - Key: env
+         Value: prod
+       - Key: Name
+         Value: K8SPUBROUTE01
+
+ K8sPrivateSubnet1RouteTbAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "K8sPrivateSubnet1"
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+   DependsOn:
+     - K8sPrivateSubnet1
+     - PrivateNatRouteTable1
+ 
+ K8sPrivateSubnet2RouteTbAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "K8sPrivateSubnet2"
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+   DependsOn:
+     - K8sPrivateSubnet2
+     - PrivateNatRouteTable1
+
+ K8sPrivateSubnet3RouteTbAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "K8sPrivateSubnet3"
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+   DependsOn:
+     - K8sPrivateSubnet3
+     - PrivateNatRouteTable1
+
+ K8sPublicSubnet1RouteTbAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "K8sPublicSubnet1"
+     RouteTableId: !Ref "PublicRouteTable1"
+   DependsOn:
+     - K8sPublicSubnet1
+     - PublicRouteTable1
+ 
+ K8sPublicSubnet2RouteTbAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "K8sPublicSubnet2"
+     RouteTableId: !Ref "PublicRouteTable1"
+   DependsOn:
+     - K8sPublicSubnet2
+     - PublicRouteTable1
+ 
+ K8sPublicSubnet3RouteTbAssociation:
+   Type: AWS::EC2::SubnetRouteTableAssociation
+   Properties:
+     SubnetId: !Ref "K8sPublicSubnet3"
+     RouteTableId: !Ref "PublicRouteTable1"
+   DependsOn:
+     - K8sPublicSubnet3
+     - PublicRouteTable1
+
+ PrivateNatRoute:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     DestinationCidrBlock: 0.0.0.0/0
+     NatGatewayId: !Ref "NgwIdE"
+   DependsOn:
+     - PrivateNatRouteTable1
+
+ PublicRoute:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PublicRouteTable1"
+     DestinationCidrBlock: 0.0.0.0/0
+     GatewayId: !Ref "IgwIdE"
+   DependsOn:
+     - PublicRouteTable1
+
+ Peering1:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     DestinationCidrBlock: 172.26.0.0/24
+     VpcPeeringConnectionId: !Select
+       - 2
+       - !Ref "VpcPeeringE"
+   DependsOn:
+     - PrivateNatRouteTable1
+
+ Peering2:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     DestinationCidrBlock: 172.0.0.0/24
+     VpcPeeringConnectionId: !Select
+       - 1
+       - !Ref "VpcPeeringE"
+   DependsOn:
+     - PrivateNatRouteTable1
+
+ Peering3:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     DestinationCidrBlock: 172.200.0.0/24
+     VpcPeeringConnectionId: !Select
+       - 0
+       - !Ref "VpcPeeringE"
+   DependsOn:
+     - PrivateNatRouteTable1
+ 
+ TransitGw1:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     TransitGatewayId: !Ref "TgwIdE"
+     DestinationCidrBlock: !FindInMap
+       - TransitGwCIDRMap
+       - TransitGw1
+       - Cidr
+   DependsOn:
+     - PrivateNatRouteTable1
+ 
+ TransitGw2:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     TransitGatewayId: !Ref "TgwIdE"
+     DestinationCidrBlock: !FindInMap
+       - TransitGwCIDRMap
+       - TransitGw2
+       - Cidr
+   DependsOn:
+     - PrivateNatRouteTable1
+
+ TransitGw3:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     TransitGatewayId: !Ref "TgwIdE"
+     DestinationCidrBlock: !FindInMap
+       - TransitGwCIDRMap
+       - TransitGw3
+       - Cidr
+   DependsOn:
+     - PrivateNatRouteTable1
+
+ TransitGw4:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     TransitGatewayId: !Ref "TgwIdE"
+     DestinationCidrBlock: !FindInMap
+       - TransitGwCIDRMap
+       - TransitGw4
+       - Cidr
+   DependsOn:
+     - PrivateNatRouteTable1
+
+ TransitGw5:
+   Type: 'AWS::EC2::Route'
+   Properties:
+     RouteTableId: !Ref "PrivateNatRouteTable1"
+     TransitGatewayId: !Ref "TgwIdE"
+     DestinationCidrBlock: !FindInMap
+       - TransitGwCIDRMap
+       - TransitGw5
+       - Cidr
+   DependsOn:
+     - PrivateNatRouteTable1
+
+
+Outputs:
+
+ K8sPrivateSubnet1:
+   Description: k8s private subnet 1
+   Value: !Ref "K8sPrivateSubnet1"
+   Export:
+     Name: !Sub "${AWS::StackName}-K8SPRVSUBNET1"
+ 
+ K8sPrivateSubnet2:
+   Description: k8s private subnet 2
+   Value: !Ref "K8sPrivateSubnet2"
+   Export:
+     Name: !Sub "${AWS::StackName}-K8SPRVSUBNET2"
+
+ K8sPrivateSubnet3:
+   Description: k8s private subnet 3
+   Value: !Ref "K8sPrivateSubnet3"
+   Export:
+     Name: !Sub "${AWS::StackName}-K8SPRVSUBNET3"
+
+ K8sPublicSubnet1:
+   Description: k8s public subnet 1
+   Value: !Ref "K8sPublicSubnet1"
+   Export:
+     Name: !Sub "${AWS::StackName}-K8SPUBSUBNET1"
+ 
+ K8sPublicSubnet2:
+   Description: k8s public subnet 2
+   Value: !Ref "K8sPublicSubnet2"
+   Export:
+     Name: !Sub "${AWS::StackName}-K8SPUBSUBNET2"
+
+ K8sPublicSubnet3:
+   Description: k8s public subnet 3
+   Value: !Ref "K8sPublicSubnet3"
+   Export:
+     Name: !Sub "${AWS::StackName}-K8SPUBSUBNET3"
+
+ PrivateNatRouteTable1:
+   Description: k8s private nat route table
+   Value: !Ref "PrivateNatRouteTable1"
+   Export:
+     Name: !Sub "${AWS::StackName}-K8SPRVNATROUTE01"
+ 
+ PublicRouteTable1:
+   Description: k8s public route table
+   Value: !Ref "PublicRouteTable1"
+   Export:
+     Name: !Sub "${AWS::StackName}-K8SPUBROUTE01"
