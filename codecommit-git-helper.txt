@@ -1,0 +1,20 @@
+# Configure codecommit
+
+https://docs.aws.amazon.com/codecommit/latest/userguide/setting-up-https-unixes.html
+https://docs.aws.amazon.com/codecommit/latest/userguide/how-to-mirror-repo-pushes.html
+
+MacOs https://docs.aws.amazon.com/codecommit/latest/userguide/troubleshooting-ch.html
+
+```
+mkdir repodir
+
+git init
+git config credential.helper '!aws codecommit credential-helper $@'
+#profile specifi##git config credential.helper '!aws --profile sre codecommit credential-helper $@'    
+git config credential.UseHttpPath true
+
+git remote add origin https://git-codecommit.us-east-1.amazonaws.com/v1/repos/sre
+git config branch.master.remote origin
+git config branch.master.merge refs/heads/master
+git fetch --all
+```
